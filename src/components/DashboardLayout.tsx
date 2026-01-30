@@ -1,0 +1,259 @@
+import { useState, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useAuthStore, getRoleLabel } from '@/stores/authStore';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  LayoutDashboard,
+  Users,
+  GraduationCap,
+  BookOpen,
+  ClipboardCheck,
+  Calculator,
+  MessageSquare,
+  Bell,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Wifi,
+  WifiOff,
+  ChevronRight,
+  School,
+  FileText,
+} from 'lucide-react';
+import type { UserRole } from '@/lib/database';
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  roles: UserRole[];
+}
+
+const navItems: NavItem[] = [
+  { label: 'Tableau de bord', href: '/dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'teacher', 'student', 'parent', 'accountant'] },
+  { label: 'Établissements', href: '/establishments', icon: School, roles: ['super_admin'] },
+  { label: 'Utilisateurs', href: '/users', icon: Users, roles: ['super_admin', 'admin'] },
+  { label: 'Classes', href: '/classes', icon: GraduationCap, roles: ['super_admin', 'admin', 'teacher'] },
+  { label: 'Élèves', href: '/students', icon: BookOpen, roles: ['super_admin', 'admin', 'teacher', 'parent'] },
+  { label: 'Notes', href: '/grades', icon: FileText, roles: ['super_admin', 'admin', 'teacher', 'student', 'parent'] },
+  { label: 'Présences', href: '/attendance', icon: ClipboardCheck, roles: ['super_admin', 'admin', 'teacher'] },
+  { label: 'Finances', href: '/finances', icon: Calculator, roles: ['super_admin', 'admin', 'accountant', 'parent'] },
+  { label: 'Messagerie', href: '/messages', icon: MessageSquare, roles: ['super_admin', 'admin', 'teacher', 'student', 'parent', 'accountant'] },
+];
+
+const DashboardLayout = ({ children }: DashboardLayoutProps) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout, isOnline } = useAuthStore();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationCount] = useState(3);
+
+  // Filter nav items based on user role
+  const filteredNavItems = navItems.filter(item => 
+    user?.role && item.roles.includes(user.role)
+  );
+
+  // Get page title
+  const getPageTitle = () => {
+    const currentItem = navItems.find(item => item.href === location.pathname);
+    return currentItem?.label || 'Dashboard';
+  };
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  if (!user) {
+    navigate('/login');
+    return null;
+  }
+
+  const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-foreground/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`fixed top-0 left-0 z-50 h-full w-64 gradient-hero transform transition-transform duration-300 lg:translate-x-0 ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        <div className="flex flex-col h-full">
+          {/* Logo */}
+          <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
+            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-glow">
+              <GraduationCap className="w-5 h-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-sidebar-foreground">EduGest</h1>
+              <p className="text-xs text-sidebar-muted">Gestion Scolaire</p>
+            </div>
+            <button 
+              onClick={() => setSidebarOpen(false)}
+              className="ml-auto lg:hidden text-sidebar-foreground hover:text-sidebar-primary transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            {filteredNavItems.map((item) => (
+              <NavLink
+                key={item.href}
+                to={item.href}
+                className={({ isActive }) => `
+                  flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
+                  ${isActive 
+                    ? 'bg-sidebar-accent text-sidebar-foreground shadow-sm' 
+                    : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                  }
+                `}
+              >
+                <item.icon className="w-5 h-5" />
+                <span>{item.label}</span>
+                {item.href === '/messages' && notificationCount > 0 && (
+                  <Badge variant="destructive" className="ml-auto text-xs h-5 min-w-5 flex items-center justify-center">
+                    {notificationCount}
+                  </Badge>
+                )}
+              </NavLink>
+            ))}
+          </nav>
+
+          {/* User section */}
+          <div className="p-4 border-t border-sidebar-border">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-sidebar-accent/50">
+              <Avatar className="w-10 h-10 border-2 border-sidebar-accent">
+                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">
+                  {user.firstName} {user.lastName}
+                </p>
+                <p className="text-xs text-sidebar-muted truncate">
+                  {getRoleLabel(user.role)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="lg:ml-64 min-h-screen flex flex-col">
+        {/* Top bar */}
+        <header className="sticky top-0 z-30 bg-card/80 backdrop-blur-lg border-b">
+          <div className="flex items-center justify-between h-16 px-4 lg:px-6">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-accent transition-colors"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>EduGest</span>
+                <ChevronRight className="w-4 h-4" />
+                <span className="font-medium text-foreground">{getPageTitle()}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Online status */}
+              <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
+                isOnline 
+                  ? 'bg-success/10 text-success' 
+                  : 'bg-warning/10 text-warning'
+              }`}>
+                {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+                <span className="hidden md:inline">{isOnline ? 'En ligne' : 'Hors ligne'}</span>
+              </div>
+
+              {/* Notifications */}
+              <Button variant="ghost" size="icon" className="relative">
+                <Bell className="w-5 h-5" />
+                {notificationCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {notificationCount}
+                  </span>
+                )}
+              </Button>
+
+              {/* User menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-2 h-10">
+                    <Avatar className="w-8 h-8">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="hidden md:inline text-sm font-medium">
+                      {user.firstName}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div>
+                      <p className="font-medium">{user.firstName} {user.lastName}</p>
+                      <p className="text-xs text-muted-foreground font-normal">{user.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>
+                    <Settings className="w-4 h-4 mr-2" />
+                    Paramètres
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Déconnexion
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 p-4 lg:p-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default DashboardLayout;
