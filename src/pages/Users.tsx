@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { db, type User, type UserRole } from '@/lib/database';
 import { getRoleLabel, getRoleColor, useAuthStore } from '@/stores/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
+import { filterUsers, createFilterContext } from '@/lib/dataFilters';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,7 @@ import { Plus, Search, MoreHorizontal, Users, Edit, Trash2, Mail, Filter } from 
 
 const UsersPage = () => {
   const { user: currentUser } = useAuthStore();
+  const { can, canManage, isSuperAdmin, isAdmin } = usePermissions();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,17 +42,12 @@ const UsersPage = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!currentUser) return;
+      
       try {
-        let query = db.users;
-        
-        // Filter by establishment for admin role
-        if (currentUser?.role === 'admin' && currentUser.establishmentId) {
-          const data = await query.where('establishmentId').equals(currentUser.establishmentId).toArray();
-          setUsers(data);
-        } else {
-          const data = await query.toArray();
-          setUsers(data);
-        }
+        const filterContext = createFilterContext(currentUser);
+        const filteredData = await filterUsers(filterContext);
+        setUsers(filteredData);
       } catch (error) {
         console.error('Error fetching users:', error);
       } finally {
@@ -101,7 +99,10 @@ const UsersPage = () => {
               Gérez les utilisateurs et leurs permissions
             </p>
           </div>
-          <Button className="gradient-primary hover:opacity-90 transition-opacity">
+          <Button 
+            className="gradient-primary hover:opacity-90 transition-opacity"
+            disabled={!can('user:create_student')}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Nouvel utilisateur
           </Button>
@@ -221,18 +222,22 @@ const UsersPage = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Modifier
-                            </DropdownMenuItem>
+                            {canManage(user.role) && (
+                              <DropdownMenuItem>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Modifier
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem>
                               <Mail className="w-4 h-4 mr-2" />
                               Envoyer un message
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Supprimer
-                            </DropdownMenuItem>
+                            {canManage(user.role) && (
+                              <DropdownMenuItem className="text-destructive">
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
