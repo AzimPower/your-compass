@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore, getRoleLabel, getRoleColor } from '@/stores/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 import { db } from '@/lib/database';
+import { filterStudents, filterGrades, filterAttendance, filterFinances, createFilterContext } from '@/lib/dataFilters';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -33,6 +35,7 @@ interface Stats {
 
 const Dashboard = () => {
   const { user } = useAuthStore();
+  const { canSee, dataScope, isSuperAdmin } = usePermissions();
   const [stats, setStats] = useState<Stats>({
     totalStudents: 0,
     totalTeachers: 0,
@@ -47,36 +50,59 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchStats = async () => {
+      if (!user) return;
+      
       try {
-        const [students, teachers, classes, establishments, grades, attendance, finances] = await Promise.all([
-          db.students.count(),
-          db.users.where('role').equals('teacher').count(),
-          db.classes.count(),
-          db.establishments.count(),
-          db.grades.toArray(),
-          db.attendance.toArray(),
-          db.finances.where('status').equals('pending').count(),
-        ]);
+        const filterContext = createFilterContext(user);
+        
+        // Use filtered data based on user permissions
+        const filteredStudents = await filterStudents(filterContext);
+        const filteredGrades = await filterGrades(filterContext);
+        const filteredAttendance = await filterAttendance(filterContext);
+        const filteredFinances = await filterFinances(filterContext);
+        
+        // Count teachers based on scope
+        let teacherCount = 0;
+        let classCount = 0;
+        let establishmentCount = 0;
+        
+        if (isSuperAdmin) {
+          teacherCount = await db.users.where('role').equals('teacher').count();
+          classCount = await db.classes.count();
+          establishmentCount = await db.establishments.count();
+        } else if (user.establishmentId) {
+          teacherCount = await db.users
+            .where('establishmentId').equals(user.establishmentId)
+            .and(u => u.role === 'teacher')
+            .count();
+          classCount = await db.classes
+            .where('establishmentId').equals(user.establishmentId)
+            .count();
+          establishmentCount = 1;
+        }
 
         // Calculate average grade
-        const avgGrade = grades.length > 0
-          ? grades.reduce((acc, g) => acc + (g.value / g.maxValue) * 20, 0) / grades.length
+        const avgGrade = filteredGrades.length > 0
+          ? filteredGrades.reduce((acc, g) => acc + (g.value / g.maxValue) * 20, 0) / filteredGrades.length
           : 0;
 
         // Calculate attendance rate
-        const presentCount = attendance.filter(a => a.status === 'present').length;
-        const attendanceRate = attendance.length > 0
-          ? (presentCount / attendance.length) * 100
+        const presentCount = filteredAttendance.filter(a => a.status === 'present').length;
+        const attendanceRate = filteredAttendance.length > 0
+          ? (presentCount / filteredAttendance.length) * 100
           : 100;
 
+        // Count pending payments
+        const pendingPayments = filteredFinances.filter(f => f.status === 'pending').length;
+
         setStats({
-          totalStudents: students,
-          totalTeachers: teachers,
-          totalClasses: classes,
-          totalEstablishments: establishments,
+          totalStudents: filteredStudents.length,
+          totalTeachers: teacherCount,
+          totalClasses: classCount,
+          totalEstablishments: establishmentCount,
           averageGrade: Math.round(avgGrade * 10) / 10,
           attendanceRate: Math.round(attendanceRate),
-          pendingPayments: finances,
+          pendingPayments,
           unreadMessages: 3,
         });
       } catch (error) {
@@ -87,7 +113,7 @@ const Dashboard = () => {
     };
 
     fetchStats();
-  }, []);
+  }, [user, isSuperAdmin]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();

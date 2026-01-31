@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore, getRoleLabel } from '@/stores/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -41,32 +42,31 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  roles: UserRole[];
+  menuKey: string;
 }
 
 const navItems: NavItem[] = [
-  { label: 'Tableau de bord', href: '/dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'teacher', 'student', 'parent', 'accountant'] },
-  { label: 'Établissements', href: '/establishments', icon: School, roles: ['super_admin'] },
-  { label: 'Utilisateurs', href: '/users', icon: Users, roles: ['super_admin', 'admin'] },
-  { label: 'Classes', href: '/classes', icon: GraduationCap, roles: ['super_admin', 'admin', 'teacher'] },
-  { label: 'Élèves', href: '/students', icon: BookOpen, roles: ['super_admin', 'admin', 'teacher', 'parent'] },
-  { label: 'Notes', href: '/grades', icon: FileText, roles: ['super_admin', 'admin', 'teacher', 'student', 'parent'] },
-  { label: 'Présences', href: '/attendance', icon: ClipboardCheck, roles: ['super_admin', 'admin', 'teacher'] },
-  { label: 'Finances', href: '/finances', icon: Calculator, roles: ['super_admin', 'admin', 'accountant', 'parent'] },
-  { label: 'Messagerie', href: '/messages', icon: MessageSquare, roles: ['super_admin', 'admin', 'teacher', 'student', 'parent', 'accountant'] },
+  { label: 'Tableau de bord', href: '/dashboard', icon: LayoutDashboard, menuKey: 'dashboard' },
+  { label: 'Établissements', href: '/establishments', icon: School, menuKey: 'establishments' },
+  { label: 'Utilisateurs', href: '/users', icon: Users, menuKey: 'users' },
+  { label: 'Classes', href: '/classes', icon: GraduationCap, menuKey: 'classes' },
+  { label: 'Élèves', href: '/students', icon: BookOpen, menuKey: 'students' },
+  { label: 'Notes', href: '/grades', icon: FileText, menuKey: 'grades' },
+  { label: 'Présences', href: '/attendance', icon: ClipboardCheck, menuKey: 'attendance' },
+  { label: 'Finances', href: '/finances', icon: Calculator, menuKey: 'finances' },
+  { label: 'Messagerie', href: '/messages', icon: MessageSquare, menuKey: 'messages' },
 ];
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, isOnline } = useAuthStore();
+  const { canSee, isSuperAdmin, dataScope } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationCount] = useState(3);
 
-  // Filter nav items based on user role
-  const filteredNavItems = navItems.filter(item => 
-    user?.role && item.roles.includes(user.role)
-  );
+  // Filter nav items based on permissions
+  const filteredNavItems = navItems.filter(item => canSee(item.menuKey));
 
   // Get page title
   const getPageTitle = () => {

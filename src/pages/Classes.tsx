@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { db, type Class, type User } from '@/lib/database';
 import { useAuthStore } from '@/stores/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
+import { filterClasses, createFilterContext } from '@/lib/dataFilters';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,22 +23,18 @@ interface ClassWithTeacher extends Class {
 
 const Classes = () => {
   const { user: currentUser } = useAuthStore();
+  const { can, isTeacher } = usePermissions();
   const [classes, setClasses] = useState<ClassWithTeacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!currentUser) return;
+      
       try {
-        let classData: Class[];
-        
-        if (currentUser?.role === 'teacher') {
-          classData = await db.classes.where('teacherId').equals(currentUser.id).toArray();
-        } else if (currentUser?.role === 'admin' && currentUser.establishmentId) {
-          classData = await db.classes.where('establishmentId').equals(currentUser.establishmentId).toArray();
-        } else {
-          classData = await db.classes.toArray();
-        }
+        const filterContext = createFilterContext(currentUser);
+        const classData = await filterClasses(filterContext);
 
         // Fetch teachers for each class
         const classesWithTeachers = await Promise.all(
@@ -86,10 +84,10 @@ const Classes = () => {
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold">Classes</h1>
             <p className="text-muted-foreground mt-1">
-              {currentUser?.role === 'teacher' ? 'Vos classes assignées' : 'Gérez les classes et les emplois du temps'}
+              {isTeacher ? 'Vos classes assignées' : 'Gérez les classes et les emplois du temps'}
             </p>
           </div>
-          {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
+          {can('class:create') && (
             <Button className="gradient-primary hover:opacity-90 transition-opacity">
               <Plus className="w-4 h-4 mr-2" />
               Nouvelle classe
