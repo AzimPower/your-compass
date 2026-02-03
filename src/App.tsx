@@ -18,16 +18,23 @@ import Grades from "./pages/Grades";
 import Attendance from "./pages/Attendance";
 import Finances from "./pages/Finances";
 import Messages from "./pages/Messages";
+import Subscriptions from "./pages/Subscriptions";
+import Blocked from "./pages/Blocked";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Protected route wrapper
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuthStore();
+// Protected route wrapper with subscription check
+const ProtectedRoute = ({ children, allowBlocked = false }: { children: React.ReactNode; allowBlocked?: boolean }) => {
+  const { isAuthenticated, isBlocked } = useAuthStore();
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+  
+  // Redirect blocked users to blocked page (except for super_admin routes)
+  if (isBlocked && !allowBlocked) {
+    return <Navigate to="/blocked" replace />;
   }
   
   return <>{children}</>;
@@ -124,6 +131,18 @@ const AppContent = () => {
       <Route path="/messages" element={
         <ProtectedRoute>
           <Messages />
+        </ProtectedRoute>
+      } />
+      <Route path="/subscriptions" element={
+        <ProtectedRoute>
+          <Subscriptions />
+        </ProtectedRoute>
+      } />
+      
+      {/* Blocked page - accessible when authenticated but blocked */}
+      <Route path="/blocked" element={
+        <ProtectedRoute allowBlocked>
+          <Blocked />
         </ProtectedRoute>
       } />
       

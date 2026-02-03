@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { db, type User, type UserRole } from '@/lib/database';
+import { db, type User, type UserRole, type Establishment } from '@/lib/database';
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isOnline: boolean;
+  isBlocked: boolean;
   error: string | null;
   
   // Actions
@@ -14,6 +15,7 @@ interface AuthState {
   logout: () => void;
   setOnlineStatus: (status: boolean) => void;
   checkAuth: () => Promise<void>;
+  checkSubscription: () => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -23,10 +25,11 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       isOnline: navigator.onLine,
+      isBlocked: false,
       error: null,
 
       login: async (email: string, password: string) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null, isBlocked: false });
         
         try {
           // Find user by email
@@ -43,9 +46,25 @@ export const useAuthStore = create<AuthState>()(
             return false;
           }
 
+          // Check subscription status for non-super_admin users
+          if (user.role !== 'super_admin' && user.establishmentId) {
+            const establishment = await db.establishments.get(user.establishmentId);
+            if (establishment && establishment.subscription.status === 'inactive') {
+              set({
+                user,
+                isAuthenticated: true,
+                isBlocked: true,
+                isLoading: false,
+                error: null,
+              });
+              return true; // Login successful but blocked
+            }
+          }
+
           set({
             user,
             isAuthenticated: true,
+            isBlocked: false,
             isLoading: false,
             error: null,
           });
@@ -64,6 +83,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           isAuthenticated: false,
+          isBlocked: false,
           error: null,
         });
       },
@@ -73,14 +93,36 @@ export const useAuthStore = create<AuthState>()(
       },
 
       checkAuth: async () => {
-        const { user } = get();
+        const { user, checkSubscription } = get();
         if (user) {
           // Verify user still exists in DB
           const dbUser = await db.users.get(user.id);
           if (!dbUser) {
-            set({ user: null, isAuthenticated: false });
+            set({ user: null, isAuthenticated: false, isBlocked: false });
+          } else {
+            // Check subscription status
+            await checkSubscription();
           }
         }
+      },
+
+      checkSubscription: async () => {
+        const { user } = get();
+        if (!user || user.role === 'super_admin') {
+          set({ isBlocked: false });
+          return false;
+        }
+        
+        if (user.establishmentId) {
+          const establishment = await db.establishments.get(user.establishmentId);
+          if (establishment && establishment.subscription.status === 'inactive') {
+            set({ isBlocked: true });
+            return true;
+          }
+        }
+        
+        set({ isBlocked: false });
+        return false;
       },
     }),
     {
@@ -88,6 +130,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        isBlocked: state.isBlocked,
       }),
     }
   )
