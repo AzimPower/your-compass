@@ -31,8 +31,10 @@ import {
   ChevronRight,
   School,
   FileText,
+  CreditCard,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/database';
+import { SubscriptionBanner } from './SubscriptionBanner';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -48,6 +50,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Tableau de bord', href: '/dashboard', icon: LayoutDashboard, menuKey: 'dashboard' },
   { label: 'Établissements', href: '/establishments', icon: School, menuKey: 'establishments' },
+  { label: 'Abonnements', href: '/subscriptions', icon: CreditCard, menuKey: 'subscriptions' },
   { label: 'Utilisateurs', href: '/users', icon: Users, menuKey: 'users' },
   { label: 'Classes', href: '/classes', icon: GraduationCap, menuKey: 'classes' },
   { label: 'Élèves', href: '/students', icon: BookOpen, menuKey: 'students' },
@@ -249,6 +252,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
         {/* Page content */}
         <main className="flex-1 p-4 lg:p-6">
+          <SubscriptionBanner />
           {children}
         </main>
       </div>

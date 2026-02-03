@@ -16,7 +16,10 @@ export const seedDatabase = async () => {
   console.log('Seeding database...');
   const now = new Date();
 
-  // Create establishments
+  // Create establishments with subscription info
+  const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  
   const establishments: Establishment[] = [
     {
       id: 'est-1',
@@ -27,6 +30,12 @@ export const seedDatabase = async () => {
       email: 'contact@jeanmoulin.edu',
       adminIds: ['admin-1'],
       settings: { maxStudentsPerClass: 30 },
+      subscription: {
+        status: 'active',
+        endDate: oneYearFromNow,
+        lastPaymentDate: now,
+        amount: 5000,
+      },
       createdAt: new Date('2020-01-01'),
     },
     {
@@ -38,6 +47,12 @@ export const seedDatabase = async () => {
       email: 'contact@victorhugo.edu',
       adminIds: ['admin-2'],
       settings: { maxStudentsPerClass: 35 },
+      subscription: {
+        status: 'active',
+        endDate: thirtyDaysFromNow, // Expire bientôt pour démo
+        lastPaymentDate: new Date(now.getTime() - 335 * 24 * 60 * 60 * 1000),
+        amount: 7500,
+      },
       createdAt: new Date('2018-06-15'),
     },
     {
@@ -49,6 +64,12 @@ export const seedDatabase = async () => {
       email: 'contact@mariecurie.edu',
       adminIds: ['admin-3'],
       settings: { maxStudentsPerClass: 40 },
+      subscription: {
+        status: 'inactive', // Inactif pour démo
+        endDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+        lastPaymentDate: new Date(now.getTime() - 395 * 24 * 60 * 60 * 1000),
+        amount: 10000,
+      },
       createdAt: new Date('2015-09-01'),
     },
   ];

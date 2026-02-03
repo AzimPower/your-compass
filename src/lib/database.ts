@@ -23,6 +23,15 @@ export interface User {
   updatedAt: Date;
 }
 
+export type SubscriptionStatus = 'active' | 'inactive';
+
+export interface Subscription {
+  status: SubscriptionStatus;
+  endDate: Date;
+  lastPaymentDate: Date | null;
+  amount: number;
+}
+
 export interface Establishment {
   id: string;
   name: string;
@@ -33,6 +42,7 @@ export interface Establishment {
   logo?: string;
   adminIds: string[];
   settings: Record<string, unknown>;
+  subscription: Subscription;
   createdAt: Date;
 }
 
