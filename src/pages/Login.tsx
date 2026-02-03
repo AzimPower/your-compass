@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { resetDatabase } from '@/lib/seedData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { GraduationCap, Wifi, WifiOff, Loader2, Eye, EyeOff } from 'lucide-react';
+import { GraduationCap, Wifi, WifiOff, Loader2, Eye, EyeOff, RefreshCw } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -28,7 +29,9 @@ const Login = () => {
   // Demo credentials
   const demoAccounts = [
     { role: 'Super Admin', email: 'admin@ecole.fr', password: 'admin123' },
+    { role: 'Admin Établissement', email: 'marie.dupont@jeanmoulin.edu', password: 'admin123' },
     { role: 'Enseignant', email: 'francois.petit@jeanmoulin.edu', password: 'prof123' },
+    { role: 'Élève', email: 'lucas.martin0@jeanmoulin.edu', password: 'eleve123' },
     { role: 'Parent', email: 'marc.martin0@email.com', password: 'parent123' },
   ];
 
@@ -184,6 +187,19 @@ const Login = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Reset button for testing */}
+          <div className="text-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => resetDatabase()}
+              className="text-sidebar-foreground/60 hover:text-sidebar-foreground"
+            >
+              <RefreshCw className="w-3 h-3 mr-2" />
+              Réinitialiser la base de données
+            </Button>
+          </div>
 
           <p className="text-center text-sm text-sidebar-foreground/60">
             © 2024 EduGest - Tous droits réservés
