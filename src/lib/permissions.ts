@@ -59,50 +59,25 @@ export type PermissionAction =
 // Permission matrix by role
 export const ROLE_PERMISSIONS: Record<UserRole, PermissionAction[]> = {
   super_admin: [
-    // Full establishment control
+    // Full establishment control ONLY
     'establishment:create',
     'establishment:read',
     'establishment:update',
     'establishment:delete',
     'establishment:read_all',
-    // Full class control
-    'class:create',
-    'class:read',
-    'class:update',
-    'class:delete',
-    // Full user control
-    'user:create_student',
-    'user:create_teacher',
-    'user:create_parent',
+    // Global user management ONLY (assigns admins, etc.)
     'user:create_admin',
-    'user:create_accountant',
     'user:read',
     'user:update',
     'user:delete',
     'user:read_all',
-    // Full grade control
-    'grade:create',
-    'grade:read',
-    'grade:update',
-    'grade:delete',
-    // Full attendance control
-    'attendance:create',
-    'attendance:read',
-    'attendance:update',
-    'attendance:justify',
-    // Full finance control
-    'finance:create',
-    'finance:read',
-    'finance:update',
-    // Full message control
-    'message:send',
-    'message:read',
-    'message:send_to_parents',
-    'message:send_to_teachers',
-    // System
+    // System configuration
     'system:configure',
     'system:audit',
     'dashboard:view_global',
+    // Messages
+    'message:send',
+    'message:read',
   ],
   
   admin: [
@@ -216,15 +191,16 @@ export const getPermissions = (role: UserRole): PermissionAction[] => {
 };
 
 // Menu items visibility by role
+// Super Admin: ONLY establishments and global users (NOT classes, grades, attendance)
 export const MENU_VISIBILITY: Record<string, UserRole[]> = {
   dashboard: ['super_admin', 'admin', 'teacher', 'student', 'parent', 'accountant'],
   establishments: ['super_admin'],
   users: ['super_admin', 'admin'],
-  classes: ['super_admin', 'admin', 'teacher'],
-  students: ['super_admin', 'admin', 'teacher'],
-  grades: ['super_admin', 'admin', 'teacher', 'student', 'parent'],
-  attendance: ['super_admin', 'admin', 'teacher', 'student', 'parent'],
-  finances: ['super_admin', 'admin', 'accountant', 'parent'],
+  classes: ['admin', 'teacher'], // Super Admin does NOT manage classes
+  students: ['admin', 'teacher'], // Super Admin does NOT manage students directly
+  grades: ['admin', 'teacher', 'student', 'parent'], // Super Admin does NOT manage grades
+  attendance: ['admin', 'teacher', 'student', 'parent'], // Super Admin does NOT manage attendance
+  finances: ['admin', 'accountant', 'parent'], // Super Admin does NOT manage finances
   messages: ['super_admin', 'admin', 'teacher', 'student', 'parent', 'accountant'],
 };
 
