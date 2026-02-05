@@ -51,11 +51,19 @@ const Subscriptions = () => {
   };
 
   const toggleSubscriptionStatus = async (est: Establishment) => {
-    const newStatus = est.subscription.status === 'active' ? 'inactive' : 'active';
+    const currentStatus = est.subscription?.status || 'inactive';
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    
+    const defaultSubscription = {
+      status: 'inactive' as const,
+      endDate: new Date(),
+      lastPaymentDate: null,
+      amount: 0,
+    };
     
     await db.establishments.update(est.id, {
       subscription: {
-        ...est.subscription,
+        ...(est.subscription || defaultSubscription),
         status: newStatus,
         ...(newStatus === 'active' && {
           endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
@@ -73,7 +81,7 @@ const Subscriptions = () => {
 
   const openPaymentDialog = (est: Establishment) => {
     setSelectedEst(est);
-    setPaymentAmount(est.subscription.amount.toString());
+    setPaymentAmount((est.subscription?.amount || 0).toString());
     setShowPaymentDialog(true);
   };
 
@@ -105,7 +113,7 @@ const Subscriptions = () => {
   };
 
   const getStatusBadge = (est: Establishment) => {
-    if (est.subscription.status === 'inactive') {
+    if (!est.subscription || est.subscription.status === 'inactive') {
       return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" /> Inactif</Badge>;
     }
     
@@ -120,9 +128,9 @@ const Subscriptions = () => {
     return <Badge variant="secondary" className="bg-success text-success-foreground"><CheckCircle className="w-3 h-3 mr-1" /> Actif</Badge>;
   };
 
-  const activeCount = establishments.filter(e => e.subscription.status === 'active').length;
-  const inactiveCount = establishments.filter(e => e.subscription.status === 'inactive').length;
-  const totalRevenue = establishments.reduce((sum, e) => sum + (e.subscription.amount || 0), 0);
+  const activeCount = establishments.filter(e => e.subscription?.status === 'active').length;
+  const inactiveCount = establishments.filter(e => !e.subscription || e.subscription.status === 'inactive').length;
+  const totalRevenue = establishments.reduce((sum, e) => sum + (e.subscription?.amount || 0), 0);
 
   return (
     <DashboardLayout>
@@ -198,7 +206,9 @@ const Subscriptions = () => {
               </TableHeader>
               <TableBody>
                 {establishments.map((est) => {
-                  const daysLeft = differenceInDays(new Date(est.subscription.endDate), new Date());
+                  const endDate = est.subscription?.endDate ? new Date(est.subscription.endDate) : new Date();
+                  const daysLeft = differenceInDays(endDate, new Date());
+                  const isActive = est.subscription?.status === 'active';
                   
                   return (
                     <TableRow key={est.id}>
@@ -208,19 +218,19 @@ const Subscriptions = () => {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {format(new Date(est.subscription.endDate), 'dd MMM yyyy', { locale: fr })}
+                          {format(endDate, 'dd MMM yyyy', { locale: fr })}
                           {daysLeft > 0 && daysLeft <= 30 && (
                             <span className="text-xs text-warning">({daysLeft}j)</span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>
-                        {est.subscription.lastPaymentDate 
+                        {est.subscription?.lastPaymentDate 
                           ? format(new Date(est.subscription.lastPaymentDate), 'dd MMM yyyy', { locale: fr })
                           : '-'
                         }
                       </TableCell>
-                      <TableCell>{est.subscription.amount.toLocaleString()}€/an</TableCell>
+                      <TableCell>{(est.subscription?.amount || 0).toLocaleString()}€/an</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
@@ -233,10 +243,10 @@ const Subscriptions = () => {
                           </Button>
                           <Button
                             size="sm"
-                            variant={est.subscription.status === 'active' ? 'destructive' : 'default'}
+                            variant={isActive ? 'destructive' : 'default'}
                             onClick={() => toggleSubscriptionStatus(est)}
                           >
-                            {est.subscription.status === 'active' ? (
+                            {isActive ? (
                               <>
                                 <XCircle className="h-4 w-4 mr-1" />
                                 Désactiver
