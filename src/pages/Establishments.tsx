@@ -17,26 +17,39 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Search, MoreHorizontal, School, MapPin, Phone, Users, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, School, MapPin, Phone, Users, Edit, Trash2, Eye, CheckCircle, XCircle } from 'lucide-react';
+import EstablishmentFormDialog from '@/components/establishments/EstablishmentFormDialog';
+import EstablishmentDetailsDialog from '@/components/establishments/EstablishmentDetailsDialog';
+import EstablishmentUsersDialog from '@/components/establishments/EstablishmentUsersDialog';
+import DeleteEstablishmentDialog from '@/components/establishments/DeleteEstablishmentDialog';
 
 const Establishments = () => {
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Dialog states
+  const [showFormDialog, setShowFormDialog] = useState(false);
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [showUsersDialog, setShowUsersDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedEstablishment, setSelectedEstablishment] = useState<Establishment | null>(null);
+
+  const fetchData = async () => {
+    try {
+      const data = await db.establishments.toArray();
+      setEstablishments(data);
+    } catch (error) {
+      console.error('Error fetching establishments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await db.establishments.toArray();
-        setEstablishments(data);
-      } catch (error) {
-        console.error('Error fetching establishments:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
@@ -63,6 +76,35 @@ const Establishments = () => {
     return colors[type] || 'bg-muted text-muted-foreground';
   };
 
+  const handleCreate = () => {
+    setSelectedEstablishment(null);
+    setShowFormDialog(true);
+  };
+
+  const handleEdit = (est: Establishment) => {
+    setSelectedEstablishment(est);
+    setShowFormDialog(true);
+  };
+
+  const handleViewDetails = (est: Establishment) => {
+    setSelectedEstablishment(est);
+    setShowDetailsDialog(true);
+  };
+
+  const handleViewUsers = (est: Establishment) => {
+    setSelectedEstablishment(est);
+    setShowUsersDialog(true);
+  };
+
+  const handleDelete = (est: Establishment) => {
+    setSelectedEstablishment(est);
+    setShowDeleteDialog(true);
+  };
+
+  const handleSuccess = () => {
+    fetchData();
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -84,7 +126,7 @@ const Establishments = () => {
               Gérez tous vos établissements scolaires
             </p>
           </div>
-          <Button className="gradient-primary hover:opacity-90 transition-opacity">
+          <Button onClick={handleCreate} className="gradient-primary hover:opacity-90 transition-opacity">
             <Plus className="w-4 h-4 mr-2" />
             Nouvel établissement
           </Button>
@@ -137,75 +179,130 @@ const Establishments = () => {
                   <TableRow>
                     <TableHead>Établissement</TableHead>
                     <TableHead>Type</TableHead>
+                    <TableHead className="hidden lg:table-cell">Statut</TableHead>
                     <TableHead className="hidden md:table-cell">Adresse</TableHead>
                     <TableHead className="hidden sm:table-cell">Téléphone</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEstablishments.map((est) => (
-                    <TableRow key={est.id} className="hover:bg-accent/50">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center">
-                            <School className="w-5 h-5 text-primary-foreground" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{est.name}</p>
-                            <p className="text-xs text-muted-foreground md:hidden">
-                              {est.address}
-                            </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getTypeColor(est.type)} variant="secondary">
-                          {getTypeLabel(est.type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <MapPin className="w-4 h-4" />
-                          {est.address}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Phone className="w-4 h-4 text-muted-foreground" />
-                          {est.phone}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Modifier
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Users className="w-4 h-4 mr-2" />
-                              Voir les utilisateurs
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Supprimer
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                  {filteredEstablishments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        Aucun établissement trouvé
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredEstablishments.map((est) => {
+                      const isActive = est.subscription?.status === 'active';
+                      return (
+                        <TableRow key={est.id} className="hover:bg-accent/50 cursor-pointer" onClick={() => handleViewDetails(est)}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center">
+                                <School className="w-5 h-5 text-primary-foreground" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{est.name}</p>
+                                <p className="text-xs text-muted-foreground md:hidden">
+                                  {est.address}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={getTypeColor(est.type)} variant="secondary">
+                              {getTypeLabel(est.type)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            {isActive ? (
+                              <Badge variant="secondary" className="bg-success/10 text-success">
+                                <CheckCircle className="w-3 h-3 mr-1" /> Actif
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive">
+                                <XCircle className="w-3 h-3 mr-1" /> Inactif
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <MapPin className="w-4 h-4" />
+                              <span className="truncate max-w-[200px]">{est.address}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Phone className="w-4 h-4 text-muted-foreground" />
+                              {est.phone}
+                            </div>
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleViewDetails(est)}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Voir les détails
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEdit(est)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Modifier
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewUsers(est)}>
+                                  <Users className="w-4 h-4 mr-2" />
+                                  Voir les utilisateurs
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(est)}>
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Supprimer
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialogs */}
+      <EstablishmentFormDialog
+        open={showFormDialog}
+        onOpenChange={setShowFormDialog}
+        establishment={selectedEstablishment}
+        onSuccess={handleSuccess}
+      />
+      
+      <EstablishmentDetailsDialog
+        open={showDetailsDialog}
+        onOpenChange={setShowDetailsDialog}
+        establishment={selectedEstablishment}
+      />
+      
+      <EstablishmentUsersDialog
+        open={showUsersDialog}
+        onOpenChange={setShowUsersDialog}
+        establishment={selectedEstablishment}
+      />
+      
+      <DeleteEstablishmentDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        establishment={selectedEstablishment}
+        onSuccess={handleSuccess}
+      />
     </DashboardLayout>
   );
 };
