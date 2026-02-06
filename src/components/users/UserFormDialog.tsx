@@ -21,7 +21,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronRight, ChevronLeft, User as UserIcon, Lock, Building2, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface UserFormDialogProps {
   open: boolean;
@@ -30,11 +31,18 @@ interface UserFormDialogProps {
   onSuccess: () => void;
 }
 
+const STEPS = [
+  { id: 1, title: 'Identité', icon: UserIcon },
+  { id: 2, title: 'Sécurité', icon: Lock },
+  { id: 3, title: 'Affectation', icon: Building2 },
+];
+
 const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogProps) => {
   const { user: currentUser } = useAuthStore();
   const { isSuperAdmin, can } = usePermissions();
   const isEditing = !!user;
 
+  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   
@@ -55,28 +63,31 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
     }
   }, [isSuperAdmin, open]);
 
-  // Populate form when editing
+  // Reset step and populate form when dialog opens/closes or user changes
   useEffect(() => {
-    if (user) {
-      setFormData({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        password: '',
-        phone: user.phone || '',
-        role: user.role,
-        establishmentId: user.establishmentId,
-      });
-    } else {
-      setFormData({
-        firstName: '',
-        lastName: '',
-        email: '',
-        password: '',
-        phone: '',
-        role: '',
-        establishmentId: currentUser?.establishmentId || '',
-      });
+    if (open) {
+      setCurrentStep(1);
+      if (user) {
+        setFormData({
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          password: '',
+          phone: user.phone || '',
+          role: user.role,
+          establishmentId: user.establishmentId,
+        });
+      } else {
+        setFormData({
+          firstName: '',
+          lastName: '',
+          email: '',
+          password: '',
+          phone: '',
+          role: '',
+          establishmentId: currentUser?.establishmentId || '',
+        });
+      }
     }
   }, [user, currentUser, open]);
 
@@ -103,30 +114,65 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
     availableRoles.push({ value: 'accountant', label: 'Comptable' });
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.role) {
-      toast.error('Veuillez remplir tous les champs obligatoires');
-      return;
+  const validateStep = (step: number): boolean => {
+    switch (step) {
+      case 1:
+        if (!formData.firstName.trim()) {
+          toast.error('Le prénom est obligatoire');
+          return false;
+        }
+        if (!formData.lastName.trim()) {
+          toast.error('Le nom est obligatoire');
+          return false;
+        }
+        if (!formData.email.trim()) {
+          toast.error('L\'email est obligatoire');
+          return false;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+          toast.error('Format d\'email invalide');
+          return false;
+        }
+        return true;
+      case 2:
+        if (!isEditing && !formData.password) {
+          toast.error('Le mot de passe est obligatoire');
+          return false;
+        }
+        if (!isEditing && formData.password.length < 6) {
+          toast.error('Le mot de passe doit contenir au moins 6 caractères');
+          return false;
+        }
+        return true;
+      case 3:
+        if (!formData.role) {
+          toast.error('Veuillez sélectionner un rôle');
+          return false;
+        }
+        if (isSuperAdmin && !formData.establishmentId) {
+          toast.error('Veuillez sélectionner un établissement');
+          return false;
+        }
+        return true;
+      default:
+        return true;
     }
+  };
 
-    if (!isEditing && !formData.password) {
-      toast.error('Le mot de passe est obligatoire pour un nouvel utilisateur');
-      return;
+  const handleNext = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep((prev) => Math.min(prev + 1, STEPS.length));
     }
+  };
 
-    if (!isEditing && formData.password.length < 6) {
-      toast.error('Le mot de passe doit contenir au moins 6 caractères');
-      return;
-    }
+  const handleBack = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
+  };
 
-    // Establishment is required for non-super_admin roles
+  const handleSubmit = async () => {
+    if (!validateStep(currentStep)) return;
+
     const establishmentId = isSuperAdmin ? formData.establishmentId : currentUser?.establishmentId;
-    if (formData.role !== 'super_admin' && !establishmentId) {
-      toast.error('Veuillez sélectionner un établissement');
-      return;
-    }
 
     setLoading(true);
 
@@ -136,13 +182,13 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
       if (existingUser && (!isEditing || existingUser.id !== user?.id)) {
         toast.error('Un utilisateur avec cet email existe déjà');
         setLoading(false);
+        setCurrentStep(1);
         return;
       }
 
       const now = new Date();
 
       if (isEditing && user) {
-        // Update existing user
         await db.users.update(user.id, {
           firstName: formData.firstName,
           lastName: formData.lastName,
@@ -155,7 +201,6 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
         });
         toast.success('Utilisateur modifié avec succès');
       } else {
-        // Create new user
         const newUser: User = {
           id: generateId(),
           firstName: formData.firstName,
@@ -182,138 +227,226 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
     }
   };
 
+  const renderStepIndicator = () => (
+    <div className="flex items-center justify-center gap-2 mb-6">
+      {STEPS.map((step, index) => {
+        const Icon = step.icon;
+        const isActive = currentStep === step.id;
+        const isCompleted = currentStep > step.id;
+        
+        return (
+          <div key={step.id} className="flex items-center">
+            <div
+              className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all",
+                isActive && "border-primary bg-primary text-primary-foreground",
+                isCompleted && "border-primary bg-primary/10 text-primary",
+                !isActive && !isCompleted && "border-muted-foreground/30 text-muted-foreground"
+              )}
+            >
+              {isCompleted ? (
+                <Check className="w-5 h-5" />
+              ) : (
+                <Icon className="w-5 h-5" />
+              )}
+            </div>
+            {index < STEPS.length - 1 && (
+              <div
+                className={cn(
+                  "w-8 h-0.5 mx-1",
+                  currentStep > step.id ? "bg-primary" : "bg-muted-foreground/30"
+                )}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderStep1 = () => (
+    <div className="space-y-4">
+      <div className="text-center mb-4">
+        <h3 className="font-medium">Informations personnelles</h3>
+        <p className="text-sm text-muted-foreground">Identité de l'utilisateur</p>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="firstName">Prénom *</Label>
+          <Input
+            id="firstName"
+            value={formData.firstName}
+            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+            placeholder="Jean"
+            autoFocus
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="lastName">Nom *</Label>
+          <Input
+            id="lastName"
+            value={formData.lastName}
+            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+            placeholder="Dupont"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="email">Email *</Label>
+        <Input
+          id="email"
+          type="email"
+          value={formData.email}
+          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          placeholder="jean.dupont@example.com"
+        />
+      </div>
+    </div>
+  );
+
+  const renderStep2 = () => (
+    <div className="space-y-4">
+      <div className="text-center mb-4">
+        <h3 className="font-medium">Sécurité & Contact</h3>
+        <p className="text-sm text-muted-foreground">Accès et coordonnées</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="password">
+          Mot de passe {isEditing ? '(laisser vide pour ne pas modifier)' : '*'}
+        </Label>
+        <Input
+          id="password"
+          type="password"
+          value={formData.password}
+          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+          placeholder="••••••••"
+          autoFocus
+        />
+        <p className="text-xs text-muted-foreground">Minimum 6 caractères</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="phone">Téléphone (optionnel)</Label>
+        <Input
+          id="phone"
+          type="tel"
+          value={formData.phone}
+          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          placeholder="+33 6 12 34 56 78"
+        />
+      </div>
+    </div>
+  );
+
+  const renderStep3 = () => (
+    <div className="space-y-4">
+      <div className="text-center mb-4">
+        <h3 className="font-medium">Rôle & Établissement</h3>
+        <p className="text-sm text-muted-foreground">Affectation de l'utilisateur</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="role">Rôle *</Label>
+        <Select
+          value={formData.role}
+          onValueChange={(value) => setFormData({ ...formData, role: value as UserRole })}
+          disabled={isEditing}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Sélectionner un rôle" />
+          </SelectTrigger>
+          <SelectContent>
+            {availableRoles.map((role) => (
+              <SelectItem key={role.value} value={role.value}>
+                {role.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {isEditing && (
+          <p className="text-xs text-muted-foreground">
+            Le rôle ne peut pas être modifié après la création
+          </p>
+        )}
+      </div>
+
+      {isSuperAdmin && (
+        <div className="space-y-2">
+          <Label htmlFor="establishment">Établissement *</Label>
+          <Select
+            value={formData.establishmentId}
+            onValueChange={(value) => setFormData({ ...formData, establishmentId: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sélectionner un établissement" />
+            </SelectTrigger>
+            <SelectContent>
+              {establishments.map((est) => (
+                <SelectItem key={est.id} value={est.id}>
+                  {est.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
+  );
+
+  const isLastStep = currentStep === STEPS.length;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}
           </DialogTitle>
           <DialogDescription>
-            {isEditing 
-              ? 'Modifiez les informations de l\'utilisateur'
-              : 'Créez un nouveau compte utilisateur'
-            }
+            Étape {currentStep} sur {STEPS.length} — {STEPS[currentStep - 1].title}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">Prénom *</Label>
-              <Input
-                id="firstName"
-                value={formData.firstName}
-                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                placeholder="Jean"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Nom *</Label>
-              <Input
-                id="lastName"
-                value={formData.lastName}
-                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                placeholder="Dupont"
-                required
-              />
-            </div>
-          </div>
+        {renderStepIndicator()}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email *</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="jean.dupont@example.com"
-              required
-            />
-          </div>
+        <div className="min-h-[200px]">
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">
-              Mot de passe {isEditing ? '(laisser vide pour ne pas modifier)' : '*'}
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder="••••••••"
-              required={!isEditing}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="phone">Téléphone</Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="+33 6 12 34 56 78"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="role">Rôle *</Label>
-            <Select
-              value={formData.role}
-              onValueChange={(value) => setFormData({ ...formData, role: value as UserRole })}
-              disabled={isEditing} // Cannot change role when editing
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner un rôle" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableRoles.map((role) => (
-                  <SelectItem key={role.value} value={role.value}>
-                    {role.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {isEditing && (
-              <p className="text-xs text-muted-foreground">
-                Le rôle ne peut pas être modifié après la création
-              </p>
+        <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={currentStep === 1 ? () => onOpenChange(false) : handleBack}
+            disabled={loading}
+          >
+            {currentStep === 1 ? (
+              'Annuler'
+            ) : (
+              <>
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Retour
+              </>
             )}
-          </div>
-
-          {isSuperAdmin && (
-            <div className="space-y-2">
-              <Label htmlFor="establishment">Établissement *</Label>
-              <Select
-                value={formData.establishmentId}
-                onValueChange={(value) => setFormData({ ...formData, establishmentId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un établissement" />
-                </SelectTrigger>
-                <SelectContent>
-                  {establishments.map((est) => (
-                    <SelectItem key={est.id} value={est.id}>
-                      {est.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Annuler
-            </Button>
-            <Button type="submit" disabled={loading}>
+          </Button>
+          
+          {isLastStep ? (
+            <Button onClick={handleSubmit} disabled={loading}>
               {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {isEditing ? 'Enregistrer' : 'Créer'}
+              {isEditing ? 'Enregistrer' : 'Créer l\'utilisateur'}
             </Button>
-          </DialogFooter>
-        </form>
+          ) : (
+            <Button onClick={handleNext}>
+              Suivant
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
