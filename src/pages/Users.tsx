@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { db, type User, type UserRole } from '@/lib/database';
+import { db, type User, type UserRole, type Establishment } from '@/lib/database';
 import { getRoleLabel, getRoleColor, useAuthStore } from '@/stores/authStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { filterUsers, createFilterContext } from '@/lib/dataFilters';
 import DashboardLayout from '@/components/DashboardLayout';
+import UserFormDialog from '@/components/users/UserFormDialog';
+import DeleteUserDialog from '@/components/users/DeleteUserDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,32 +32,50 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Search, MoreHorizontal, Users, Edit, Trash2, Mail, Filter } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Mail, Filter, Building2 } from 'lucide-react';
 
 const UsersPage = () => {
   const { user: currentUser } = useAuthStore();
-  const { can, canManage, isSuperAdmin, isAdmin } = usePermissions();
+  const { can, canManage, isSuperAdmin } = usePermissions();
   const [users, setUsers] = useState<User[]>([]);
+  const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!currentUser) return;
-      
-      try {
-        const filterContext = createFilterContext(currentUser);
-        const filteredData = await filterUsers(filterContext);
-        setUsers(filteredData);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-      } finally {
-        setLoading(false);
+  // Dialog states
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  const fetchData = async () => {
+    if (!currentUser) return;
+    
+    try {
+      const filterContext = createFilterContext(currentUser);
+      const filteredData = await filterUsers(filterContext);
+      setUsers(filteredData);
+
+      // Load establishments for super admin to show establishment names
+      if (isSuperAdmin) {
+        const allEstablishments = await db.establishments.toArray();
+        setEstablishments(allEstablishments);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
-  }, [currentUser]);
+  }, [currentUser, isSuperAdmin]);
+
+  const getEstablishmentName = (establishmentId: string): string => {
+    const est = establishments.find(e => e.id === establishmentId);
+    return est?.name || '-';
+  };
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = 
@@ -78,6 +98,30 @@ const UsersPage = () => {
     accountant: users.filter(u => u.role === 'accountant').length,
   };
 
+  const handleCreateUser = () => {
+    setSelectedUser(null);
+    setFormDialogOpen(true);
+  };
+
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user);
+    setFormDialogOpen(true);
+  };
+
+  const handleDeleteUser = (user: User) => {
+    setSelectedUser(user);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleSuccess = () => {
+    fetchData();
+  };
+
+  // Check if current user can create any users
+  const canCreateUser = can('user:create_student') || can('user:create_teacher') || 
+                        can('user:create_parent') || can('user:create_admin') || 
+                        can('user:create_accountant');
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -96,16 +140,21 @@ const UsersPage = () => {
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold">Utilisateurs</h1>
             <p className="text-muted-foreground mt-1">
-              Gérez les utilisateurs et leurs permissions
+              {isSuperAdmin 
+                ? 'Gérez tous les utilisateurs du système'
+                : 'Gérez les utilisateurs de votre établissement'
+              }
             </p>
           </div>
-          <Button 
-            className="gradient-primary hover:opacity-90 transition-opacity"
-            disabled={!can('user:create_student')}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Nouvel utilisateur
-          </Button>
+          {canCreateUser && (
+            <Button 
+              className="gradient-primary hover:opacity-90 transition-opacity"
+              onClick={handleCreateUser}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Nouvel utilisateur
+            </Button>
+          )}
         </div>
 
         {/* Role stats */}
@@ -116,7 +165,7 @@ const UsersPage = () => {
             { role: 'parent' as UserRole, label: 'Parents' },
             { role: 'admin' as UserRole, label: 'Admins' },
             { role: 'accountant' as UserRole, label: 'Comptables' },
-            { role: 'super_admin' as UserRole, label: 'Super Admins' },
+            ...(isSuperAdmin ? [{ role: 'super_admin' as UserRole, label: 'Super Admins' }] : []),
           ].map((item) => (
             <Card 
               key={item.role} 
@@ -159,7 +208,7 @@ const UsersPage = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tous les rôles</SelectItem>
-                    <SelectItem value="super_admin">Super Admin</SelectItem>
+                    {isSuperAdmin && <SelectItem value="super_admin">Super Admin</SelectItem>}
                     <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="teacher">Enseignant</SelectItem>
                     <SelectItem value="student">Élève</SelectItem>
@@ -177,84 +226,119 @@ const UsersPage = () => {
                   <TableRow>
                     <TableHead>Utilisateur</TableHead>
                     <TableHead>Rôle</TableHead>
+                    {isSuperAdmin && <TableHead className="hidden lg:table-cell">Établissement</TableHead>}
                     <TableHead className="hidden md:table-cell">Email</TableHead>
                     <TableHead className="hidden sm:table-cell">Date d'inscription</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.slice(0, 20).map((user) => (
-                    <TableRow key={user.id} className="hover:bg-accent/50">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-10 h-10">
-                            <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                              {user.firstName[0]}{user.lastName[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">{user.firstName} {user.lastName}</p>
-                            <p className="text-xs text-muted-foreground md:hidden">
-                              {user.email}
-                            </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={`${getRoleColor(user.role)} text-white`}>
-                          {getRoleLabel(user.role)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Mail className="w-4 h-4" />
-                          {user.email}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                        {new Date(user.createdAt).toLocaleDateString('fr-FR')}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {canManage(user.role) && (
-                              <DropdownMenuItem>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Modifier
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem>
-                              <Mail className="w-4 h-4 mr-2" />
-                              Envoyer un message
-                            </DropdownMenuItem>
-                            {canManage(user.role) && (
-                              <DropdownMenuItem className="text-destructive">
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Supprimer
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                  {filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={isSuperAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                        Aucun utilisateur trouvé
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredUsers.slice(0, 50).map((user) => (
+                      <TableRow key={user.id} className="hover:bg-accent/50">
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-10 h-10">
+                              <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                                {user.firstName[0]}{user.lastName[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium">{user.firstName} {user.lastName}</p>
+                              <p className="text-xs text-muted-foreground md:hidden">
+                                {user.email}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`${getRoleColor(user.role)} text-white`}>
+                            {getRoleLabel(user.role)}
+                          </Badge>
+                        </TableCell>
+                        {isSuperAdmin && (
+                          <TableCell className="hidden lg:table-cell">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Building2 className="w-4 h-4" />
+                              {getEstablishmentName(user.establishmentId)}
+                            </div>
+                          </TableCell>
+                        )}
+                        <TableCell className="hidden md:table-cell">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Mail className="w-4 h-4" />
+                            {user.email}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                          {new Date(user.createdAt).toLocaleDateString('fr-FR')}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {canManage(user.role) && (
+                                <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Modifier
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem>
+                                <Mail className="w-4 h-4 mr-2" />
+                                Envoyer un message
+                              </DropdownMenuItem>
+                              {canManage(user.role) && user.id !== currentUser?.id && (
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={() => handleDeleteUser(user)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Supprimer
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
             
-            {filteredUsers.length > 20 && (
+            {filteredUsers.length > 50 && (
               <p className="text-center text-sm text-muted-foreground mt-4">
-                Affichage de 20 sur {filteredUsers.length} utilisateurs
+                Affichage de 50 sur {filteredUsers.length} utilisateurs
               </p>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialogs */}
+      <UserFormDialog
+        open={formDialogOpen}
+        onOpenChange={setFormDialogOpen}
+        user={selectedUser}
+        onSuccess={handleSuccess}
+      />
+
+      <DeleteUserDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        user={selectedUser}
+        onSuccess={handleSuccess}
+      />
     </DashboardLayout>
   );
 };
