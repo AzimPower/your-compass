@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
-import { db, type Class, type User } from '@/lib/database';
+import { db, type Class, type User, type AcademicYear } from '@/lib/database';
 import { useAuthStore } from '@/stores/authStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { filterClasses, createFilterContext } from '@/lib/dataFilters';
+import { getLevelById } from '@/lib/schoolLevels';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Plus, Search, Users, BookOpen, GraduationCap, Edit, MoreHorizontal, Eye } from 'lucide-react';
+import { Plus, Search, Users, BookOpen, GraduationCap, Edit, MoreHorizontal, Eye, Calendar } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +20,7 @@ import {
 
 interface ClassWithTeacher extends Class {
   teacher?: User;
+  academicYear?: AcademicYear;
 }
 
 const Classes = () => {
@@ -36,15 +38,18 @@ const Classes = () => {
         const filterContext = createFilterContext(currentUser);
         const classData = await filterClasses(filterContext);
 
-        // Fetch teachers for each class
-        const classesWithTeachers = await Promise.all(
+        // Fetch teachers and academic years for each class
+        const classesWithDetails = await Promise.all(
           classData.map(async (cls) => {
             const teacher = await db.users.get(cls.teacherId);
-            return { ...cls, teacher };
+            const academicYear = cls.academicYearId 
+              ? await db.academicYears.get(cls.academicYearId)
+              : undefined;
+            return { ...cls, teacher, academicYear };
           })
         );
 
-        setClasses(classesWithTeachers);
+        setClasses(classesWithDetails);
       } catch (error) {
         console.error('Error fetching classes:', error);
       } finally {
@@ -64,6 +69,11 @@ const Classes = () => {
     if (level === 'primaire') return 'bg-success/10 text-success';
     if (level === 'collège') return 'bg-secondary/10 text-secondary';
     return 'bg-primary/10 text-primary';
+  };
+
+  const getLevelDisplayName = (cls: ClassWithTeacher) => {
+    const levelInfo = getLevelById(cls.levelId);
+    return levelInfo?.shortName || cls.level;
   };
 
   if (loading) {
@@ -119,7 +129,7 @@ const Classes = () => {
                     <div>
                       <CardTitle className="text-lg">{cls.name}</CardTitle>
                       <Badge className={`${getLevelColor(cls.level)} mt-1`} variant="secondary">
-                        {cls.level}
+                        {getLevelDisplayName(cls)}
                       </Badge>
                     </div>
                   </div>
@@ -165,8 +175,8 @@ const Classes = () => {
                     <span>{cls.studentIds.length} élèves</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <GraduationCap className="w-4 h-4" />
-                    <span>{cls.academicYear}</span>
+                    <Calendar className="w-4 h-4" />
+                    <span>{cls.academicYear?.name || 'N/A'}</span>
                   </div>
                 </div>
               </CardContent>

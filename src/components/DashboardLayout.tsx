@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore, getRoleLabel } from '@/stores/authStore';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAcademicYear } from '@/hooks/useAcademicYear';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +14,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   LayoutDashboard,
   Users,
@@ -32,6 +40,8 @@ import {
   School,
   FileText,
   CreditCard,
+  Calendar,
+  Lock,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/database';
 import { SubscriptionBanner } from './SubscriptionBanner';
@@ -51,6 +61,7 @@ const navItems: NavItem[] = [
   { label: 'Tableau de bord', href: '/dashboard', icon: LayoutDashboard, menuKey: 'dashboard' },
   { label: 'Établissements', href: '/establishments', icon: School, menuKey: 'establishments' },
   { label: 'Abonnements', href: '/subscriptions', icon: CreditCard, menuKey: 'subscriptions' },
+  { label: 'Années scolaires', href: '/academic-years', icon: Calendar, menuKey: 'academicYears' },
   { label: 'Utilisateurs', href: '/users', icon: Users, menuKey: 'users' },
   { label: 'Classes', href: '/classes', icon: GraduationCap, menuKey: 'classes' },
   { label: 'Élèves', href: '/students', icon: BookOpen, menuKey: 'students' },
@@ -64,9 +75,13 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, isOnline } = useAuthStore();
-  const { canSee, isSuperAdmin, dataScope } = usePermissions();
+  const { canSee, isSuperAdmin, isAdmin, dataScope } = usePermissions();
+  const { years, selectedYear, isReadOnly, selectYear } = useAcademicYear();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationCount] = useState(3);
+  
+  // Show year selector only for admin and below (not super admin who manages all establishments)
+  const showYearSelector = !isSuperAdmin && (isAdmin || years.length > 0);
 
   // Filter nav items based on permissions
   const filteredNavItems = navItems.filter(item => canSee(item.menuKey));
@@ -193,6 +208,37 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Academic year selector */}
+              {showYearSelector && years.length > 0 && (
+                <div className="hidden sm:flex items-center gap-2">
+                  <Select 
+                    value={selectedYear?.id || ''} 
+                    onValueChange={(value) => selectYear(value)}
+                  >
+                    <SelectTrigger className="w-[140px] h-8 text-xs">
+                      <Calendar className="w-3.5 h-3.5 mr-1" />
+                      <SelectValue placeholder="Année" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((year) => (
+                        <SelectItem key={year.id} value={year.id} className="text-xs">
+                          <div className="flex items-center gap-2">
+                            {year.status === 'closed' && <Lock className="w-3 h-3 text-muted-foreground" />}
+                            {year.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {isReadOnly && (
+                    <Badge variant="secondary" className="text-xs">
+                      <Lock className="w-3 h-3 mr-1" />
+                      Lecture seule
+                    </Badge>
+                  )}
+                </div>
+              )}
+
               {/* Online status */}
               <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
                 isOnline 

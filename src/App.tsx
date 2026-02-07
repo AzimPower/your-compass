@@ -19,6 +19,7 @@ import Attendance from "./pages/Attendance";
 import Finances from "./pages/Finances";
 import Messages from "./pages/Messages";
 import Subscriptions from "./pages/Subscriptions";
+import AcademicYears from "./pages/AcademicYears";
 import Blocked from "./pages/Blocked";
 import NotFound from "./pages/NotFound";
 
@@ -136,6 +137,11 @@ const AppContent = () => {
       <Route path="/subscriptions" element={
         <ProtectedRoute>
           <Subscriptions />
+        </ProtectedRoute>
+      } />
+      <Route path="/academic-years" element={
+        <ProtectedRoute>
+          <AcademicYears />
         </ProtectedRoute>
       } />
       
