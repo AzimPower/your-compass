@@ -1,8 +1,28 @@
-import { db, generateId, type User, type Establishment, type Student, type Class, type Subject, type Grade, type Attendance, type Finance, type Notification } from './database';
+import { db, generateId, type User, type Establishment, type Student, type Class, type Subject, type Grade, type Attendance, type Finance, type Notification, type AcademicYear, type StudentEnrollment, type ClassSubject, type TeacherAssignment } from './database';
+import { SCHOOL_LEVELS, generateAcademicYearName } from './schoolLevels';
 
 // Utility to generate random date in range
 const randomDate = (start: Date, end: Date): Date => {
   return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+};
+
+// Map class names to level IDs
+const classNameToLevelId: Record<string, string> = {
+  'CP': 'cp',
+  'CE1': 'ce1',
+  'CE2': 'ce2',
+  'CM1': 'cm1',
+  'CM2': 'cm2',
+  '6ème A': '6eme',
+  '6ème B': '6eme',
+  '5ème A': '5eme',
+  '4ème A': '4eme',
+  '3ème A': '3eme',
+  '2nde A': '2nde',
+  '2nde B': '2nde',
+  '1ère S': '1ere',
+  '1ère ES': '1ere',
+  'Terminale S': 'tle',
 };
 
 // Generate sample data
@@ -49,7 +69,7 @@ export const seedDatabase = async () => {
       settings: { maxStudentsPerClass: 35 },
       subscription: {
         status: 'active',
-        endDate: thirtyDaysFromNow, // Expire bientôt pour démo
+        endDate: thirtyDaysFromNow,
         lastPaymentDate: new Date(now.getTime() - 335 * 24 * 60 * 60 * 1000),
         amount: 7500,
       },
@@ -65,7 +85,7 @@ export const seedDatabase = async () => {
       adminIds: ['admin-3'],
       settings: { maxStudentsPerClass: 40 },
       subscription: {
-        status: 'inactive', // Inactif pour démo
+        status: 'inactive',
         endDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
         lastPaymentDate: new Date(now.getTime() - 395 * 24 * 60 * 60 * 1000),
         amount: 10000,
@@ -74,13 +94,37 @@ export const seedDatabase = async () => {
     },
   ];
 
+  // Create academic years for each establishment
+  const currentYear = now.getFullYear();
+  const academicYearName = generateAcademicYearName(now.getMonth() < 8 ? currentYear - 1 : currentYear);
+  
+  const academicYears: AcademicYear[] = establishments.map(est => ({
+    id: `ay-${est.id}`,
+    establishmentId: est.id,
+    name: academicYearName,
+    startDate: new Date(`${academicYearName.split('-')[0]}-09-01`),
+    endDate: new Date(`${academicYearName.split('-')[1]}-07-31`),
+    status: 'active' as const,
+    createdAt: new Date(`${academicYearName.split('-')[0]}-09-01`),
+  }));
+
   // Create subjects
   const subjects: Subject[] = [
-    { id: 'subj-1', name: 'Mathématiques', code: 'MATH', establishmentId: 'est-1', color: '#667eea' },
-    { id: 'subj-2', name: 'Français', code: 'FR', establishmentId: 'est-1', color: '#764ba2' },
-    { id: 'subj-3', name: 'Sciences', code: 'SCI', establishmentId: 'est-1', color: '#48bb78' },
-    { id: 'subj-4', name: 'Histoire-Géo', code: 'HG', establishmentId: 'est-1', color: '#ed8936' },
-    { id: 'subj-5', name: 'Anglais', code: 'EN', establishmentId: 'est-1', color: '#4299e1' },
+    { id: 'subj-1', name: 'Mathématiques', code: 'MATH', establishmentId: 'est-1', color: '#667eea', isCommon: true },
+    { id: 'subj-2', name: 'Français', code: 'FR', establishmentId: 'est-1', color: '#764ba2', isCommon: true },
+    { id: 'subj-3', name: 'Sciences', code: 'SCI', establishmentId: 'est-1', color: '#48bb78', isCommon: true },
+    { id: 'subj-4', name: 'Histoire-Géo', code: 'HG', establishmentId: 'est-1', color: '#ed8936', isCommon: true },
+    { id: 'subj-5', name: 'Anglais', code: 'EN', establishmentId: 'est-1', color: '#4299e1', isCommon: true },
+    // Subjects for college
+    { id: 'subj-6', name: 'Mathématiques', code: 'MATH', establishmentId: 'est-2', color: '#667eea', isCommon: true },
+    { id: 'subj-7', name: 'Français', code: 'FR', establishmentId: 'est-2', color: '#764ba2', isCommon: true },
+    { id: 'subj-8', name: 'Physique-Chimie', code: 'PC', establishmentId: 'est-2', color: '#48bb78' },
+    { id: 'subj-9', name: 'SVT', code: 'SVT', establishmentId: 'est-2', color: '#38a169' },
+    { id: 'subj-10', name: 'Anglais', code: 'EN', establishmentId: 'est-2', color: '#4299e1', isCommon: true },
+    // Subjects for lycee
+    { id: 'subj-11', name: 'Mathématiques', code: 'MATH', establishmentId: 'est-3', color: '#667eea', isCommon: true },
+    { id: 'subj-12', name: 'Philosophie', code: 'PHILO', establishmentId: 'est-3', color: '#9f7aea' },
+    { id: 'subj-13', name: 'Physique-Chimie', code: 'PC', establishmentId: 'est-3', color: '#48bb78' },
   ];
 
   // Create users
@@ -179,25 +223,61 @@ export const seedDatabase = async () => {
     });
   }
 
-  // Create classes
+  // Create classes with academic year reference
   const classes: Class[] = [];
   const classNames = ['CP', 'CE1', 'CE2', 'CM1', 'CM2', '6ème A', '6ème B', '5ème A', '4ème A', '3ème A', '2nde A', '2nde B', '1ère S', '1ère ES', 'Terminale S'];
   
   for (let i = 0; i < 15; i++) {
     const estIndex = i < 5 ? 0 : i < 10 ? 1 : 2;
     const level = i < 5 ? 'primaire' : i < 10 ? 'collège' : 'lycée';
+    const className = classNames[i];
+    const levelId = classNameToLevelId[className] || '';
     
     classes.push({
       id: `class-${i + 1}`,
       establishmentId: establishments[estIndex].id,
-      name: classNames[i],
+      name: className,
+      levelId,
       level,
       teacherId: `teacher-${(i % 15) + 1}`,
       studentIds: [],
       schedule: {},
-      academicYear: '2024-2025',
+      academicYearId: academicYears[estIndex].id,
     });
   }
+
+  // Create class subjects (linking classes to subjects)
+  const classSubjects: ClassSubject[] = [];
+  classes.forEach((cls, idx) => {
+    const estIndex = idx < 5 ? 0 : idx < 10 ? 1 : 2;
+    const estSubjects = subjects.filter(s => s.establishmentId === establishments[estIndex].id);
+    
+    estSubjects.forEach((subj, subjIdx) => {
+      classSubjects.push({
+        id: `cs-${cls.id}-${subj.id}`,
+        classId: cls.id,
+        subjectId: subj.id,
+        academicYearId: academicYears[estIndex].id,
+        coefficient: 1,
+        hoursPerWeek: 3,
+        teacherId: `teacher-${((idx + subjIdx) % 15) + 1}`,
+      });
+    });
+  });
+
+  // Create teacher assignments
+  const teacherAssignments: TeacherAssignment[] = [];
+  classes.forEach((cls, idx) => {
+    const estIndex = idx < 5 ? 0 : idx < 10 ? 1 : 2;
+    teacherAssignments.push({
+      id: `ta-${cls.id}`,
+      teacherId: cls.teacherId,
+      classId: cls.id,
+      academicYearId: academicYears[estIndex].id,
+      isPrincipal: true,
+      subjectIds: classSubjects.filter(cs => cs.classId === cls.id).map(cs => cs.subjectId),
+    });
+  });
 
   // Create students and parents
   const studentFirstNames = ['Lucas', 'Emma', 'Hugo', 'Léa', 'Louis', 'Chloé', 'Gabriel', 'Manon', 'Arthur', 'Camille', 'Jules', 'Zoé', 'Adam', 'Inès', 'Nathan', 'Lina', 'Théo', 'Alice', 'Noah', 'Jade'];
@@ -205,6 +285,7 @@ export const seedDatabase = async () => {
   const lastNames = ['Martin', 'Bernard', 'Thomas', 'Robert', 'Richard', 'Durand', 'Dubois', 'Michel', 'Garcia', 'David', 'Bertrand', 'Morel', 'Simon', 'Laurent', 'Clement'];
 
   const students: Student[] = [];
+  const studentEnrollments: StudentEnrollment[] = [];
   
   for (let i = 0; i < 100; i++) {
     const classIndex = i % 15;
@@ -213,6 +294,7 @@ export const seedDatabase = async () => {
     const studentFirstName = studentFirstNames[i % studentFirstNames.length];
     const parentIndex = Math.floor(i / 2);
     const parentFirstName = parentFirstNames[parentIndex % parentFirstNames.length];
+    const estIndex = classIndex < 5 ? 0 : classIndex < 10 ? 1 : 2;
     
     // Add parent
     const parentId = `parent-${i + 1}`;
@@ -257,17 +339,30 @@ export const seedDatabase = async () => {
       status: Math.random() > 0.05 ? 'active' : 'inactive',
     });
 
+    // Add student enrollment for current academic year
+    studentEnrollments.push({
+      id: `enrollment-${studentId}`,
+      studentId,
+      classId: classInfo.id,
+      academicYearId: academicYears[estIndex].id,
+      enrollmentDate: new Date('2024-09-01'),
+      decision: 'pending',
+    });
+
     // Update class with student
     classInfo.studentIds.push(studentId);
   }
 
-  // Create grades
+  // Create grades with academic year reference
   const grades: Grade[] = [];
   const terms = ['Trimestre 1', 'Trimestre 2', 'Trimestre 3'];
   
   for (let i = 0; i < 500; i++) {
     const student = students[i % students.length];
-    const subject = subjects[i % subjects.length];
+    const classIndex = classes.findIndex(c => c.id === student.classId);
+    const estIndex = classIndex < 5 ? 0 : classIndex < 10 ? 1 : 2;
+    const estSubjects = subjects.filter(s => s.establishmentId === establishments[estIndex].id);
+    const subject = estSubjects[i % estSubjects.length];
     const term = terms[Math.floor(i / 200)];
     
     grades.push({
@@ -276,6 +371,7 @@ export const seedDatabase = async () => {
       classId: student.classId,
       subjectId: subject.id,
       teacherId: classes.find(c => c.id === student.classId)?.teacherId || 'teacher-1',
+      academicYearId: academicYears[estIndex].id,
       value: Math.round((Math.random() * 12 + 8) * 10) / 10,
       maxValue: 20,
       date: randomDate(new Date('2024-09-01'), now),
@@ -284,18 +380,21 @@ export const seedDatabase = async () => {
     });
   }
 
-  // Create attendance records
+  // Create attendance records with academic year reference
   const attendance: Attendance[] = [];
   const statuses: ('present' | 'absent' | 'late' | 'excused')[] = ['present', 'present', 'present', 'present', 'present', 'absent', 'late', 'excused'];
   
   for (let i = 0; i < 300; i++) {
     const student = students[i % students.length];
     const status = statuses[Math.floor(Math.random() * statuses.length)];
+    const classIndex = classes.findIndex(c => c.id === student.classId);
+    const estIndex = classIndex < 5 ? 0 : classIndex < 10 ? 1 : 2;
     
     attendance.push({
       id: `attendance-${i + 1}`,
       studentId: student.id,
       classId: student.classId,
+      academicYearId: academicYears[estIndex].id,
       date: randomDate(new Date('2024-09-01'), now),
       status,
       justification: status === 'excused' ? 'Rendez-vous médical' : undefined,
@@ -303,18 +402,21 @@ export const seedDatabase = async () => {
     });
   }
 
-  // Create finances
+  // Create finances with academic year reference
   const finances: Finance[] = [];
   
   for (let i = 0; i < 200; i++) {
     const student = students[i % students.length];
     const isPaid = Math.random() > 0.3;
     const isOverdue = !isPaid && Math.random() > 0.5;
+    const classIndex = classes.findIndex(c => c.id === student.classId);
+    const estIndex = classIndex < 5 ? 0 : classIndex < 10 ? 1 : 2;
     
     finances.push({
       id: `finance-${i + 1}`,
       studentId: student.id,
       establishmentId: student.establishmentId,
+      academicYearId: academicYears[estIndex].id,
       type: Math.random() > 0.3 ? 'invoice' : 'payment',
       amount: Math.round(Math.random() * 500 + 100),
       dueDate: randomDate(now, new Date('2025-06-30')),
@@ -347,12 +449,30 @@ export const seedDatabase = async () => {
   ];
 
   // Insert all data
-  await db.transaction('rw', [db.establishments, db.subjects, db.users, db.classes, db.students, db.grades, db.attendance, db.finances, db.notifications], async () => {
+  await db.transaction('rw', [
+    db.establishments, 
+    db.subjects, 
+    db.users, 
+    db.classes, 
+    db.students, 
+    db.grades, 
+    db.attendance, 
+    db.finances, 
+    db.notifications,
+    db.academicYears,
+    db.studentEnrollments,
+    db.classSubjects,
+    db.teacherAssignments,
+  ], async () => {
     await db.establishments.bulkAdd(establishments);
+    await db.academicYears.bulkAdd(academicYears);
     await db.subjects.bulkAdd(subjects);
     await db.users.bulkAdd(users);
     await db.classes.bulkAdd(classes);
+    await db.classSubjects.bulkAdd(classSubjects);
+    await db.teacherAssignments.bulkAdd(teacherAssignments);
     await db.students.bulkAdd(students);
+    await db.studentEnrollments.bulkAdd(studentEnrollments);
     await db.grades.bulkAdd(grades);
     await db.attendance.bulkAdd(attendance);
     await db.finances.bulkAdd(finances);

@@ -196,6 +196,7 @@ export const MENU_VISIBILITY: Record<string, UserRole[]> = {
   dashboard: ['super_admin', 'admin', 'teacher', 'student', 'parent', 'accountant'],
   establishments: ['super_admin'],
   subscriptions: ['super_admin'], // Subscription management for super admin only
+  academicYears: ['admin'], // Academic year management for establishment admins
   users: ['super_admin', 'admin'],
   classes: ['admin', 'teacher'], // Super Admin does NOT manage classes
   students: ['admin', 'teacher'], // Super Admin does NOT manage students directly
