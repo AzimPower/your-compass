@@ -199,6 +199,7 @@ export const MENU_VISIBILITY: Record<string, UserRole[]> = {
   academicYears: ['admin'], // Academic year management for establishment admins
   users: ['super_admin', 'admin'],
   classes: ['admin', 'teacher'], // Super Admin does NOT manage classes
+  subjects: ['admin'], // Subject catalog management for establishment admins
   students: ['admin', 'teacher'], // Super Admin does NOT manage students directly
   grades: ['admin', 'teacher', 'student', 'parent'], // Super Admin does NOT manage grades
   attendance: ['admin', 'teacher', 'student', 'parent'], // Super Admin does NOT manage attendance

@@ -64,6 +64,7 @@ const navItems: NavItem[] = [
   { label: 'Années scolaires', href: '/academic-years', icon: Calendar, menuKey: 'academicYears' },
   { label: 'Utilisateurs', href: '/users', icon: Users, menuKey: 'users' },
   { label: 'Classes', href: '/classes', icon: GraduationCap, menuKey: 'classes' },
+  { label: 'Matières', href: '/subjects', icon: BookOpen, menuKey: 'subjects' },
   { label: 'Élèves', href: '/students', icon: BookOpen, menuKey: 'students' },
   { label: 'Notes', href: '/grades', icon: FileText, menuKey: 'grades' },
   { label: 'Présences', href: '/attendance', icon: ClipboardCheck, menuKey: 'attendance' },

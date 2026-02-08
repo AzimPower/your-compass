@@ -20,6 +20,7 @@ import Finances from "./pages/Finances";
 import Messages from "./pages/Messages";
 import Subscriptions from "./pages/Subscriptions";
 import AcademicYears from "./pages/AcademicYears";
+import Subjects from "./pages/Subjects";
 import Blocked from "./pages/Blocked";
 import NotFound from "./pages/NotFound";
 
@@ -142,6 +143,11 @@ const AppContent = () => {
       <Route path="/academic-years" element={
         <ProtectedRoute>
           <AcademicYears />
+        </ProtectedRoute>
+      } />
+      <Route path="/subjects" element={
+        <ProtectedRoute>
+          <Subjects />
         </ProtectedRoute>
       } />
       
