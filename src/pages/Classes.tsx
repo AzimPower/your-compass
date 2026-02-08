@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { db, type Class, type User, type AcademicYear } from '@/lib/database';
+import { db, type Class, type User, type AcademicYear, type Subject, type ClassSubject } from '@/lib/database';
 import { useAuthStore } from '@/stores/authStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { filterClasses, createFilterContext } from '@/lib/dataFilters';
 import { getLevelById } from '@/lib/schoolLevels';
 import DashboardLayout from '@/components/DashboardLayout';
+import ClassFormDialog from '@/components/classes/ClassFormDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ import {
 interface ClassWithTeacher extends Class {
   teacher?: User;
   academicYear?: AcademicYear;
+  subjectsCount?: number;
 }
 
 const Classes = () => {
@@ -30,32 +32,41 @@ const Classes = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Dialog states
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+
+  const fetchData = async () => {
+    if (!currentUser) return;
+    
+    try {
+      const filterContext = createFilterContext(currentUser);
+      const classData = await filterClasses(filterContext);
+
+      // Fetch teachers, academic years and subjects count for each class
+      const classesWithDetails = await Promise.all(
+        classData.map(async (cls) => {
+          const teacher = await db.users.get(cls.teacherId);
+          const academicYear = cls.academicYearId 
+            ? await db.academicYears.get(cls.academicYearId)
+            : undefined;
+          const subjectsCount = await db.classSubjects
+            .where('classId')
+            .equals(cls.id)
+            .count();
+          return { ...cls, teacher, academicYear, subjectsCount };
+        })
+      );
+
+      setClasses(classesWithDetails);
+    } catch (error) {
+      console.error('Error fetching classes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      if (!currentUser) return;
-      
-      try {
-        const filterContext = createFilterContext(currentUser);
-        const classData = await filterClasses(filterContext);
-
-        // Fetch teachers and academic years for each class
-        const classesWithDetails = await Promise.all(
-          classData.map(async (cls) => {
-            const teacher = await db.users.get(cls.teacherId);
-            const academicYear = cls.academicYearId 
-              ? await db.academicYears.get(cls.academicYearId)
-              : undefined;
-            return { ...cls, teacher, academicYear };
-          })
-        );
-
-        setClasses(classesWithDetails);
-      } catch (error) {
-        console.error('Error fetching classes:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, [currentUser]);
 
@@ -98,7 +109,13 @@ const Classes = () => {
             </p>
           </div>
           {can('class:create') && (
-            <Button className="gradient-primary hover:opacity-90 transition-opacity">
+            <Button 
+              className="gradient-primary hover:opacity-90 transition-opacity"
+              onClick={() => {
+                setSelectedClass(null);
+                setFormDialogOpen(true);
+              }}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Nouvelle classe
             </Button>
@@ -144,7 +161,10 @@ const Classes = () => {
                         <Eye className="w-4 h-4 mr-2" />
                         Voir les détails
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        setSelectedClass(cls);
+                        setFormDialogOpen(true);
+                      }}>
                         <Edit className="w-4 h-4 mr-2" />
                         Modifier
                       </DropdownMenuItem>
@@ -175,9 +195,13 @@ const Classes = () => {
                     <span>{cls.studentIds.length} élèves</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="w-4 h-4" />
-                    <span>{cls.academicYear?.name || 'N/A'}</span>
+                    <BookOpen className="w-4 h-4" />
+                    <span>{cls.subjectsCount || 0} matières</span>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Calendar className="w-3 h-3" />
+                  <span>{cls.academicYear?.name || 'N/A'}</span>
                 </div>
               </CardContent>
             </Card>
@@ -194,6 +218,14 @@ const Classes = () => {
           </div>
         )}
       </div>
+
+      {/* Dialog */}
+      <ClassFormDialog
+        open={formDialogOpen}
+        onOpenChange={setFormDialogOpen}
+        classData={selectedClass}
+        onSuccess={fetchData}
+      />
     </DashboardLayout>
   );
 };

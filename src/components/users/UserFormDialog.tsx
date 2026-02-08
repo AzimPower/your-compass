@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, type User, type UserRole, type Establishment, generateId } from '@/lib/database';
+import { db, type User, type UserRole, type Establishment, type Subject, generateId } from '@/lib/database';
 import { useAuthStore } from '@/stores/authStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -20,8 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Loader2, ChevronRight, ChevronLeft, User as UserIcon, Lock, Building2, Check } from 'lucide-react';
+import { Loader2, ChevronRight, ChevronLeft, User as UserIcon, Lock, Building2, Check, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface UserFormDialogProps {
@@ -31,10 +34,17 @@ interface UserFormDialogProps {
   onSuccess: () => void;
 }
 
-const STEPS = [
+const STEPS_BASE = [
   { id: 1, title: 'Identité', icon: UserIcon },
   { id: 2, title: 'Sécurité', icon: Lock },
   { id: 3, title: 'Affectation', icon: Building2 },
+];
+
+const STEPS_TEACHER = [
+  { id: 1, title: 'Identité', icon: UserIcon },
+  { id: 2, title: 'Sécurité', icon: Lock },
+  { id: 3, title: 'Affectation', icon: Building2 },
+  { id: 4, title: 'Matières', icon: BookOpen },
 ];
 
 const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogProps) => {
@@ -45,6 +55,8 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -56,17 +68,35 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
     establishmentId: '',
   });
 
-  // Load establishments for super admin
+  // Determine which steps to use based on role
+  const STEPS = formData.role === 'teacher' ? STEPS_TEACHER : STEPS_BASE;
+
+  // Load establishments for super admin and subjects for teacher role
   useEffect(() => {
-    if (isSuperAdmin && open) {
-      db.establishments.toArray().then(setEstablishments);
-    }
-  }, [isSuperAdmin, open]);
+    const loadData = async () => {
+      if (isSuperAdmin && open) {
+        const estData = await db.establishments.toArray();
+        setEstablishments(estData);
+      }
+      
+      // Load subjects for the establishment
+      const estId = isSuperAdmin ? formData.establishmentId : currentUser?.establishmentId;
+      if (estId && open) {
+        const subjectsData = await db.subjects
+          .where('establishmentId')
+          .equals(estId)
+          .toArray();
+        setSubjects(subjectsData);
+      }
+    };
+    loadData();
+  }, [isSuperAdmin, open, formData.establishmentId, currentUser?.establishmentId]);
 
   // Reset step and populate form when dialog opens/closes or user changes
   useEffect(() => {
     if (open) {
       setCurrentStep(1);
+      setSelectedSubjectIds([]);
       if (user) {
         setFormData({
           firstName: user.firstName,
@@ -77,6 +107,17 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
           role: user.role,
           establishmentId: user.establishmentId,
         });
+        // Load teacher's subjects if editing a teacher
+        if (user.role === 'teacher') {
+          db.teacherAssignments
+            .where('teacherId')
+            .equals(user.id)
+            .toArray()
+            .then(assignments => {
+              const subjectIds = assignments.flatMap(a => a.subjectIds);
+              setSelectedSubjectIds([...new Set(subjectIds)]);
+            });
+        }
       } else {
         setFormData({
           firstName: '',
@@ -396,6 +437,65 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
     </div>
   );
 
+  const renderStep4 = () => (
+    <div className="space-y-4">
+      <div className="text-center mb-4">
+        <h3 className="font-medium">Matières enseignées</h3>
+        <p className="text-sm text-muted-foreground">Sélectionnez les matières de l'enseignant</p>
+      </div>
+
+      <ScrollArea className="h-[250px] pr-4">
+        <div className="space-y-2">
+          {subjects.map((subject) => {
+            const isSelected = selectedSubjectIds.includes(subject.id);
+
+            return (
+              <div
+                key={subject.id}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 transition-all cursor-pointer",
+                  isSelected ? "border-primary bg-primary/5" : "border-border hover:bg-accent/50"
+                )}
+                onClick={() => {
+                  if (isSelected) {
+                    setSelectedSubjectIds(selectedSubjectIds.filter(id => id !== subject.id));
+                  } else {
+                    setSelectedSubjectIds([...selectedSubjectIds, subject.id]);
+                  }
+                }}
+              >
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={() => {}}
+                />
+                <div
+                  className="w-4 h-4 rounded"
+                  style={{ backgroundColor: subject.color || '#667eea' }}
+                />
+                <span className="flex-1 font-medium">{subject.name}</span>
+                <Badge variant="outline">{subject.code}</Badge>
+              </div>
+            );
+          })}
+
+          {subjects.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <BookOpen className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Aucune matière disponible</p>
+              <p className="text-sm">Créez d'abord des matières dans le catalogue</p>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {selectedSubjectIds.length > 0 && (
+        <p className="text-sm text-muted-foreground pt-2 border-t">
+          {selectedSubjectIds.length} matière(s) sélectionnée(s)
+        </p>
+      )}
+    </div>
+  );
+
   const isLastStep = currentStep === STEPS.length;
 
   return (
@@ -416,6 +516,7 @@ const UserFormDialog = ({ open, onOpenChange, user, onSuccess }: UserFormDialogP
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
+          {currentStep === 4 && formData.role === 'teacher' && renderStep4()}
         </div>
 
         <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
