@@ -31,6 +31,7 @@ const Login = () => {
     { role: 'Super Admin', email: 'admin@ecole.fr', password: 'admin123' },
     { role: 'Admin Établissement', email: 'marie.dupont@jeanmoulin.edu', password: 'admin123' },
     { role: 'Enseignant', email: 'francois.petit@jeanmoulin.edu', password: 'prof123' },
+    { role: 'Comptable', email: 'jean.moreau@jeanmoulin.edu', password: 'compta123' },
     { role: 'Élève', email: 'lucas.martin0@jeanmoulin.edu', password: 'eleve123' },
     { role: 'Parent', email: 'marc.martin0@email.com', password: 'parent123' },
   ];
