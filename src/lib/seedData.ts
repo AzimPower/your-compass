@@ -202,7 +202,7 @@ export const seedDatabase = async () => {
   ];
 
   // Create teachers
-  const teacherFirstNames = ['François', 'Isabelle', 'Michel', 'Catherine', 'Philippe', 'Nathalie', 'Laurent', 'Véronique', 'Christophe', 'Sylvie', 'Nicolas', 'Sandrine', 'Olivier', 'Valérie', 'Éric'];
+  const teacherFirstNames = ['Francois', 'Isabelle', 'Michel', 'Catherine', 'Philippe', 'Nathalie', 'Laurent', 'Veronique', 'Christophe', 'Sylvie', 'Nicolas', 'Sandrine', 'Olivier', 'Valerie', 'Eric'];
   const teacherLastNames = ['Petit', 'Roux', 'Girard', 'Andre', 'Lefebvre', 'Mercier', 'Fournier', 'Lambert', 'Bonnet', 'François', 'Martinez', 'Legrand', 'Garnier', 'Faure', 'Rousseau'];
   
   for (let i = 0; i < 15; i++) {

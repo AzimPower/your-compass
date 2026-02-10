@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore, getRoleLabel } from '@/stores/authStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAcademicYear } from '@/hooks/useAcademicYear';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +45,7 @@ import {
   Lock,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/database';
+import { cn } from '@/lib/utils';
 import { SubscriptionBanner } from './SubscriptionBanner';
 
 interface DashboardLayoutProps {
@@ -65,7 +67,7 @@ const navItems: NavItem[] = [
   { label: 'Utilisateurs', href: '/users', icon: Users, menuKey: 'users' },
   { label: 'Classes', href: '/classes', icon: GraduationCap, menuKey: 'classes' },
   { label: 'Matières', href: '/subjects', icon: BookOpen, menuKey: 'subjects' },
-  { label: 'Élèves', href: '/students', icon: BookOpen, menuKey: 'students' },
+  { label: 'Élèves', href: '/students', icon: Users, menuKey: 'students' },
   { label: 'Notes', href: '/grades', icon: FileText, menuKey: 'grades' },
   { label: 'Présences', href: '/attendance', icon: ClipboardCheck, menuKey: 'attendance' },
   { label: 'Finances', href: '/finances', icon: Calculator, menuKey: 'finances' },
@@ -78,8 +80,18 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { user, logout, isOnline } = useAuthStore();
   const { canSee, isSuperAdmin, isAdmin, dataScope } = usePermissions();
   const { years, selectedYear, isReadOnly, selectYear } = useAcademicYear();
+  const { unreadCount, fetchNotifications, notifications, markAsRead, markAllAsRead } = useNotificationStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notificationCount] = useState(3);
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
+
+  // Fetch notifications periodically
+  useEffect(() => {
+    if (user) {
+      fetchNotifications(user.id);
+      const interval = setInterval(() => fetchNotifications(user.id), 10000);
+      return () => clearInterval(interval);
+    }
+  }, [user, fetchNotifications]);
   
   // Show year selector only for admin and below (not super admin who manages all establishments)
   const showYearSelector = !isSuperAdmin && (isAdmin || years.length > 0);
@@ -158,9 +170,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               >
                 <item.icon className="w-5 h-5" />
                 <span>{item.label}</span>
-                {item.href === '/messages' && notificationCount > 0 && (
+                {item.href === '/messages' && unreadCount > 0 && (
                   <Badge variant="destructive" className="ml-auto text-xs h-5 min-w-5 flex items-center justify-center">
-                    {notificationCount}
+                    {unreadCount}
                   </Badge>
                 )}
               </NavLink>
@@ -251,14 +263,38 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               </div>
 
               {/* Notifications */}
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-5 h-5" />
-                {notificationCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {notificationCount}
-                  </span>
-                )}
-              </Button>
+              <DropdownMenu open={notifDropdownOpen} onOpenChange={setNotifDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative">
+                    <Bell className="w-5 h-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  <DropdownMenuLabel className="flex items-center justify-between">
+                    <span>Notifications</span>
+                    {unreadCount > 0 && (
+                      <button onClick={() => user && markAllAsRead(user.id)} className="text-xs text-primary hover:underline">Tout marquer lu</button>
+                    )}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">Aucune notification</div>
+                  ) : (
+                    notifications.slice(0, 8).map(n => (
+                      <DropdownMenuItem key={n.id} className={cn("flex flex-col items-start gap-1 p-3 cursor-pointer", !n.read && "bg-primary/5")} onClick={() => { markAsRead(n.id); if (n.type === 'message') navigate('/messages'); }}>
+                        <span className="font-medium text-sm">{n.title}</span>
+                        <span className="text-xs text-muted-foreground line-clamp-2">{n.message}</span>
+                        <span className="text-[10px] text-muted-foreground">{new Date(n.createdAt).toLocaleDateString('fr-FR')}</span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* User menu */}
               <DropdownMenu>
